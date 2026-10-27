@@ -19,16 +19,26 @@ Ultimately, this codebase bridges classical cryogenic electronics theory with a 
 ### Cryogenic Control-Line Architecture
 The simulated control line traverses a multi-stage dilution refrigerator architecture, descending across distinct thermal anchors from room-temperature electronics down to the quantum processor:
 
-Cryogenic Stage             Temperature (T)            Physical Role & Engineering Function
-____________________________________________________________________________________________________________________________
-Room-Temperature Input      300 K                      Microwave signal source (AWG/generators) and 
-                                                       initial thermal noise baseline 
-4K stage                    4.0 K                      Primary thermal interception anchor; 
-                                                       absorbs bulk conductive loads ($1.5\text{ W}$ cooling budget) 
-                                                       and bulk RF power dissipation
-Intermediate stage          700 mK                     Secondary attenuation stage; 
-(Still)                                                provides further thermal isolation and noise suppression
-Intermediate Stage          100 mK                     High-attenuation stage for deep thermal noise stripping prior to 
-(Cold Plate)                                           mixing chamber entry
-Mixing Chamber              10 mK                      Final signal delivery stage ($15\,\mu\text{W}$ cooling budget) 
-                                                       housing the quantum device and final output SNR evaluation
+|    Cryogenic Stage      |    Temperature (T)    |   Physical Role & Engineering Function    |
+|-------------------------|-----------------------|-------------------------------------------|
+| Room-Temperature Input  |    300 K              | Microwave signal source (AWG/generators)  | 
+|                         |                       | and initial thermal noise baseline.       |
+|-------------------------|-----------------------|-------------------------------------------|
+| 4K stage                |    4.0 K              | Primary thermal interception anchor;      |
+|                         |                       | absorbs bulk conductive loads             |
+|                         |                       | ($1.5\text{ W}$ cooling budget) and bulk  |
+|                         |                       | RF power dissipation.                     |
+|-------------------------|-----------------------|-------------------------------------------|
+| Intermediate stage      |    700 mK             | Secondary attenuation stage; provides     |
+| (Still)                 |                       | further thermal isolation and noise       |
+|                         |                       | suppression.                              |
+|-------------------------|-----------------------|-------------------------------------------|
+| Intermediate Stage      |    100 mK             | High-attenuation stage for deep thermal   |
+| (Cold Plate)            |                       | noise stripping prior to mixing chamber   |
+|                         |                       | entry                                     |
+|-------------------------|-----------------------|-------------------------------------------|
+| Mixing Chamber          |    10 mK              | Final signal delivery stage               |
+|                         |                       | ($15\,\mu\text{W}$ cooling budget) housing|
+|                         |                       | the quantum device and final output       |
+|                         |                       | SNR evaluation                            |
+-----------------------------------------------------------------------------------------------
