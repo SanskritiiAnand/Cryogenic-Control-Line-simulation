@@ -42,3 +42,92 @@ The simulated control line traverses a multi-stage dilution refrigerator archite
 |                         |                       | the quantum device and final output       |
 |                         |                       | SNR evaluation                            |
 -----------------------------------------------------------------------------------------------
+
+Each stage is parameterized by its absolute temperature, assigned discrete attenuation, and coaxial cable segment dimensions. As input microwave signals propagate downward, power is attenuated sequentially through the cascaded stages. 
+To evaluate system performance, the simulation engine decouples and tracks two concurrent physical pathways:
+* Thermal Path: Calculates phonon-mediated conductive heat transfer ($Q_{\text{cond}}$) and RF microwave power dissipation ($Q_{\text{RF}}$) deposited at each stage anchor.
+* Microwave Path: Propagates signal power ($P_{\text{sig}}$) and cascaded noise power spectral density ($S_{\text{noise}}$) through the attenuator chain.
+This architectural separation enables simultaneous evaluation of hardware thermal budget constraints and output signal integrity within a unified computational pipeline.
+
+### Microwave Attenuation
+Attenuation specified in decibels is converted into a linnear power-transmission coefficient:
+$$\eta = 10^{-\frac{\vert{}A_{\mathrm{dB}}\vert{}}{10}}$$
+where $A_{\mathrm{dB}}$: attenuation in decibels
+      $\eta$: resulting transmitted power fraction
+For a cascaded sequence of $N$ attenuation stages, the total output signal power at the termination of the transmission line is evaluated as:
+$$P_{\mathrm{out}} = P_{\mathrm{in}} \prod_{i=1}^{N} \eta_i$$
+
+To interface between standard radio-frequency (RF) power metrics and absolute thermal dissipation calculations, input power specified in decibels-relative-to-one-milliwatt ($\text{dBm}$) is converted into absolute watts via:                                                         $$P_{\mathrm{in}}[\mathrm{W}] = 10^{\frac{P_{\mathrm{in}}[\mathrm{dBm}]}{10}} \times 10^{-3}$$
+
+To protect sensitive millikelvin stages from excessive thermal saturation—such as the strict $15\,\mu\text{W}$ cooling threshold at the $10\text{ mK}$ mixing chamber—the framework distributes total system attenuation across the four primary cryogenic anchor stages according to a non-uniform 40:20:20:20 allocation profile. By dumping $40\%$ of the total attenuation at the robust $4\text{ K}$ thermal anchor (possessiong a large $1.5\text{ W}$ cooling capacity), the system effectively strips high-temperature thermal noise while preventing runaway heating at lower stages.
+
+### Conductive Heat Transfer
+Conductive heat transfer through a coaxial cable segment spanning between boundary temperatures $T_{\mathrm{hot}}$ and $T_{\mathrm{cold}}$ is modeled via Fourier's law of thermal conduction:
+$$Q_{\mathrm{cond}} = \frac{A}{L} \int_{T_{\mathrm{cold}}}^{T_{\mathrm{hot}}} k(T) \, dT$$
+where, A: effective conductor cross-sectional area
+       L: physical cable-segment length
+       k(T): temperature-dependent thermal conductivity profile.
+       $T_{\mathrm{hot}}$: absolute temperature at upper segment boundary
+       $T_{\mathrm{cold}}$: absolute temperature at lower segment boundary
+
+For material-based calculations, the thermal conductivity integral is evaluated numerically using high-precision trapezoidal integration across a refined discretization grid of 200 temperature points.
+To support simplified preliminary estimations or fallback conditions when a temperature-dependent material fit is omitted, an alternative constant-average-conductivity model is also implemented:
+$$Q_{\mathrm{cond}} = k_{\mathrm{avg}} \frac{A}{L} (T_{\mathrm{hot}} - T_{\mathrm{cold}})$$
+
+### RF Dissipation
+Microwave power dissipated within an attenuator stage is converted directly into thermal heat load deposited at that specific thermal anchor:
+$$Q_{\mathrm{RF}} = P_{\mathrm{in}} (1 - \eta) D$$
+where D represents the control signal duty cycle, constrained within the closed interval $0 \le D \le 1$.
+The total thermal load $Q_{\mathrm{total}}$ imposed on each individual cryogenic stage is evaluated as the linear superposition of phono-mediated conduction and active RF dissipation:
+$$Q_{\mathrm{total}} = Q_{\mathrm{cond}} + Q_{\mathrm{RF}}$$
+
+The simulation framework computes these thermal components independently for every stage and outputs a granular stage-wise breakdown. This isolation allows researchers to directly analyse and inspect the relative contributions of conductive heat transport versus microwave signal dissipation across the dilution refrigerator stack.
+
+### Cryogenic Thermal Load Model
+The commplete cryogenic thermal load model is implemented within src/thermal.py, providing a modular computational structure for stage-wise thermodynamics. The module incorporates:
+* Temperature dependent thermal conductivity profiles k(T) for multiple coaxial cable material models.
+* High-precision numerical integration of conductive heat transfer ($Q_{\text{cond}}$) via trapezoidal integration.
+* An alternative constant-average-conductivity approximation ($k_{\text{avg}}$) for preliminary or fallback estimates.
+* Active RF power dissipation calculations ($Q_{\text{RF}}$) governed by incident power, discrete stage attenuation, and signal duty cycles.
+* Granular per-stage thermal evaluations that calculate conductive, RF, and total heat loads independently, allowing researchers to inspect the relative contributions of transport versus dissipation across the entire harness.
+
+### Material Dependent Conductivity
+Three approximate conductivity models are implemented as piecewise functions of temperature to capture distinct material behaviours across cryogenic thermal regimes:
+* Stainless Steel 304: The model uses separate temperature-dependent expressions below 1K, between 1K and 10K, and above 10K
+* Beryllium Copper (BeCu): The model uses separate expressions below 4K, between 4K and 20K, and above 20K.
+* Niobium-Titanium (NbTi): The model distinguishes temperatures below and above the nominal superconducting critical temperature, $$T_c = 9.2\text{ K}$$
+
+Below this critical temperature, a low-temperature power-law fit is applied. Above $T_c$, a distinct power law approximates the normal-state thermal conductivity region.
+Note: These are simplified, piecewise conductivity fits utilized to explore material-dependent thermal behavior within the simulation framework. They are not presented or validated as experimental material-property datasets.
+
+## Thermal Noise Spectral Density
+The model calculates the thermal noise power spectral density using the Planck-form expression:
+$$S_{\mathrm{th}}(f,T) = \frac{hf}{\exp(hf/k_BT)-1}$$
+where, $h$: Planck's constant
+       $f$: microwave frequency
+       $k_B$: Boltzmann's constant
+       T: absolute stage temperature
+The simulation implementation optionally include the quantum zero-point contribution:
+$$S_{\mathrm{model}}(f,T) = S_{\mathrm{th}}(f,T) + \frac{hf}{2}$$
+The zero-point contribution is disabled by default and can be enabled during custom simulations and parameter sweeps.
+
+### Cascaded Noise Propagation
+Each attenuator is modeled as a thermal element operating at its corresponding stage temperature. The noise power spectral density propagates according to:
+$$S_{\mathrm{out}} = \eta S_{\mathrm{in}} + (1 - \eta) S_{\mathrm{th}}(f, T_{\mathrm{stage}})$$
+This relation combines the transmitted input noise power spectral density with the thermal noise contribution associated with the attenuator's local thermal environment.
+The calculation begins at room temperature (300K) and cascades sequentially through the four cryogenic stages, producing the final accumulated output noise spectral density at the 10mK mixing chamber.
+
+For a specified measurement or control bandwidth B, the integrated output noise power is evaluated as: 
+$$P_{\mathrm{noise}} = S_{\mathrm{out}} B$$
+
+### Signal-to-Noise Ratio and Qubit Thermal Metrics
+The output SNR is evaluated at the 10mK mixing chamber using the final transmitted signal power and the integrated noise power:
+$$\mathrm{SNR}_{\mathrm{linear}} = \frac{P_{\mathrm{signal}}}{P_{\mathrm{noise}}}$$
+$$\mathrm{SNR}_{\mathrm{dB}} = 10 \log_{10(\mathrm{SNR}_{\mathrm{linear}})$$
+
+To connect thermal noise performance directly with quantum hardware considerations, the model estimates the thermal photon occupation number $n_{\mathrm{th}}$ at the mixing-chamber temperature:
+$$n_{\mathrm{th}} = \frac{1}{\exp(hf/k_B T) - 1}$$
+Using this thermal photon occupancy, the simulation computes the corresponding two-level thermal excited-state population $P_1$ for a qubit coupled to the line:
+$$P_1 = \frac{n_{\mathrm{th}}}{2n_{\mathrm{th}} + 1}$$
+
+These metrics provide critical quantitative indicators of the residual thermal environment and its direct impact on superconducting-qubit decoherence and operational fidelity.
